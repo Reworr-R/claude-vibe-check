@@ -53,3 +53,7 @@ Stored in `~/.config/claude-vibe-check/config`. Can also be set via environment 
 ## License
 
 MIT
+
+## Links
+
+[![Hypercommit](https://img.shields.io/badge/Hypercommit-DB2475)](https://hypercommit.com/claude-vibe-check)
