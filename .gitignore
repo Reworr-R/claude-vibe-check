@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+.devcontainer/
+web/
+*.jpg
+*.png
+__pycache__/
+*.pyc
+.env
