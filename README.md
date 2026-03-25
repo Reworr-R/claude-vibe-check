@@ -28,6 +28,19 @@ claude-vibe-check mode offline            # uses hsemotion by default
 claude-vibe-check mode offline fer        # or pick fer backend
 ```
 
+## Vibe Stats
+
+Every vibe check in offline mode is logged automatically. Run `stats` to see your emotion patterns over time, broken down by project, time of day, and daily trends.
+
+```bash
+claude-vibe-check stats              # all time
+claude-vibe-check stats today        # today only
+claude-vibe-check stats week         # last 7 days
+claude-vibe-check stats my-project   # filter by project name
+```
+
+History is stored in `~/.config/claude-vibe-check/history.jsonl` and can be cleared with `claude-vibe-check history clear`.
+
 ## Commands
 
 ```
@@ -37,6 +50,8 @@ claude-vibe-check test               Test webcam capture
 claude-vibe-check status             Show current config
 claude-vibe-check mode [online|offline]   Switch analysis mode
 claude-vibe-check cooldown [seconds]      Set minimum interval between checks
+claude-vibe-check stats [today|week|<project>]  Show vibe statistics
+claude-vibe-check history clear      Clear vibe history
 ```
 
 ## Config

@@ -1,6 +1,6 @@
 {
   "name": "claude-vibe-check",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Claude Code hook that reads your face after code changes and adjusts its work based on your reaction",
   "bin": {
     "claude-vibe-check": "bin/cli.js"
@@ -26,6 +26,14 @@
     "vibe-check",
     "developer-experience"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reworr-R/claude-vibe-check.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Reworr-R/claude-vibe-check/issues"
+  },
+  "homepage": "https://reworr.com/vibe-check/",
   "author": "reworr",
   "license": "MIT",
   "engines": {

@@ -92,7 +92,7 @@ function setup() {
   // Check if already installed
   const existingStop = settings.hooks.Stop || [];
   const alreadyInstalled = existingStop.some((entry) =>
-    JSON.stringify(entry).includes("claude-vibe-check")
+    JSON.stringify(entry).includes("claude-vibe-check"),
   );
 
   if (alreadyInstalled) {
@@ -130,7 +130,7 @@ function uninstall() {
   }
 
   settings.hooks.Stop = settings.hooks.Stop.filter(
-    (entry) => !JSON.stringify(entry).includes("claude-vibe-check")
+    (entry) => !JSON.stringify(entry).includes("claude-vibe-check"),
   );
 
   if (settings.hooks.Stop.length === 0) {
@@ -163,7 +163,7 @@ function test() {
   try {
     const result = execSync(
       `bash "${path.join(HOOK_DIR, "capture.sh")}" /tmp/claude-vibe-check-test.jpg`,
-      { encoding: "utf-8", timeout: 10000 }
+      { encoding: "utf-8", timeout: 10000 },
     ).trim();
 
     if (fs.existsSync(result)) {
@@ -181,7 +181,10 @@ function test() {
 }
 
 function getConfigDir() {
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "claude-vibe-check");
+  return path.join(
+    process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+    "claude-vibe-check",
+  );
 }
 
 function readConfig() {
@@ -218,7 +221,10 @@ function checkOfflineDeps() {
   const py = getVenvPython() || "python3";
   const backends = [];
   try {
-    execSync(`${py} -c 'from hsemotion_onnx.facial_emotions import HSEmotionRecognizer'`, { stdio: "ignore" });
+    execSync(
+      `${py} -c 'from hsemotion_onnx.facial_emotions import HSEmotionRecognizer'`,
+      { stdio: "ignore" },
+    );
     backends.push("hsemotion");
   } catch {}
   try {
@@ -290,7 +296,9 @@ function mode(newMode, arg2) {
   if (newMode === "offline") {
     let backends = checkOfflineDeps();
     if (backends.length === 0) {
-      console.log("\n  No offline backend found. Setting up automatically...\n");
+      console.log(
+        "\n  No offline backend found. Setting up automatically...\n",
+      );
       console.log("  Choose a backend:");
       console.log("    1) hsemotion — better accuracy, faster (~100ms)");
       console.log("    2) fer       — simpler, decent accuracy (~200ms)\n");
@@ -302,7 +310,9 @@ function mode(newMode, arg2) {
       backends = checkOfflineDeps();
 
       if (backends.length === 0) {
-        console.log("  Installation succeeded but backend still not detected.\n");
+        console.log(
+          "  Installation succeeded but backend still not detected.\n",
+        );
         process.exit(1);
       }
     }
@@ -337,7 +347,7 @@ function status() {
   const settings = readSettings();
   const installed =
     settings.hooks?.Stop?.some((entry) =>
-      JSON.stringify(entry).includes("claude-vibe-check")
+      JSON.stringify(entry).includes("claude-vibe-check"),
     ) || false;
 
   const deps = checkDependencies();
@@ -357,6 +367,246 @@ function status() {
   }
 
   console.log(`  Settings: ${SETTINGS_PATH}\n`);
+}
+
+function getHistoryPath() {
+  return path.join(getConfigDir(), "history.jsonl");
+}
+
+function readHistory() {
+  const histPath = getHistoryPath();
+  if (!fs.existsSync(histPath)) return [];
+  return fs
+    .readFileSync(histPath, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => {
+      try {
+        return JSON.parse(l);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function normalizeEmotion(e) {
+  const map = {
+    angry: "angry",
+    anger: "angry",
+    frustrated: "angry",
+    sad: "sad",
+    sadness: "sad",
+    fear: "fearful",
+    scared: "fearful",
+    disgust: "disgusted",
+    contempt: "disgusted",
+    happy: "happy",
+    happiness: "happy",
+    surprise: "surprised",
+    surprised: "surprised",
+    neutral: "neutral",
+  };
+  return map[(e || "").toLowerCase()] || e || "unknown";
+}
+
+function emotionEmoji(e) {
+  const map = {
+    happy: "\u{1F60A}",
+    sad: "\u{1F614}",
+    angry: "\u{1F621}",
+    fearful: "\u{1F628}",
+    disgusted: "\u{1F612}",
+    surprised: "\u{1F632}",
+    neutral: "\u{1F610}",
+    unknown: "\u{2753}",
+    pending: "\u{1F4F7}",
+  };
+  return map[e] || "\u{2753}";
+}
+
+function formatBar(count, max, width = 20) {
+  const filled = max > 0 ? Math.round((count / max) * width) : 0;
+  return "\u2588".repeat(filled) + "\u2591".repeat(width - filled);
+}
+
+function stats(filter) {
+  const entries = readHistory().filter((e) => e.emotion !== "pending");
+
+  if (entries.length === 0) {
+    console.log(
+      "\n  No vibe history yet. Use claude-vibe-check in offline mode to start tracking.\n",
+    );
+    return;
+  }
+
+  // Apply filter
+  let filtered = entries;
+  let filterLabel = "";
+  if (filter === "today") {
+    const today = new Date().toISOString().slice(0, 10);
+    filtered = entries.filter((e) => e.ts && e.ts.startsWith(today));
+    filterLabel = " (today)";
+  } else if (filter === "week") {
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    filtered = entries.filter((e) => e.ts >= weekAgo);
+    filterLabel = " (last 7 days)";
+  } else if (filter && filter !== "all") {
+    filtered = entries.filter((e) => e.project === filter || e.cwd === filter);
+    filterLabel = ` (${filter})`;
+  }
+
+  if (filtered.length === 0) {
+    console.log(`\n  No vibes found${filterLabel}.\n`);
+    return;
+  }
+
+  console.log(`\n  Vibe Stats${filterLabel} — ${filtered.length} checks\n`);
+
+  // Emotion distribution
+  const emotions = {};
+  for (const e of filtered) {
+    const norm = normalizeEmotion(e.emotion);
+    emotions[norm] = (emotions[norm] || 0) + 1;
+  }
+
+  const sorted = Object.entries(emotions).sort((a, b) => b[1] - a[1]);
+  const maxCount = sorted[0][1];
+
+  console.log("  Emotions:");
+  for (const [emotion, count] of sorted) {
+    const pct = ((count / filtered.length) * 100).toFixed(0);
+    const emoji = emotionEmoji(emotion);
+    console.log(
+      `    ${emoji} ${emotion.padEnd(10)} ${formatBar(count, maxCount)} ${count} (${pct}%)`,
+    );
+  }
+
+  // Per-project breakdown (if multiple projects)
+  const projects = {};
+  for (const e of filtered) {
+    const p = e.project || "unknown";
+    if (!projects[p]) projects[p] = {};
+    const norm = normalizeEmotion(e.emotion);
+    projects[p][norm] = (projects[p][norm] || 0) + 1;
+  }
+
+  const projectNames = Object.keys(projects);
+  if (projectNames.length > 1) {
+    console.log("\n  By project:");
+    for (const name of projectNames) {
+      const total = Object.values(projects[name]).reduce((a, b) => a + b, 0);
+      const dominant = Object.entries(projects[name]).sort(
+        (a, b) => b[1] - a[1],
+      )[0];
+      const emoji = emotionEmoji(dominant[0]);
+      console.log(
+        `    ${name.padEnd(20)} ${total} checks, mostly ${emoji} ${dominant[0]} (${((dominant[1] / total) * 100).toFixed(0)}%)`,
+      );
+    }
+  }
+
+  // Time of day patterns
+  const timeSlots = { morning: 0, afternoon: 0, evening: 0, night: 0 };
+  const timeEmotions = { morning: {}, afternoon: {}, evening: {}, night: {} };
+  for (const e of filtered) {
+    const h = e.hour != null ? e.hour : new Date(e.ts).getUTCHours();
+    let slot;
+    if (h >= 6 && h < 12) slot = "morning";
+    else if (h >= 12 && h < 18) slot = "afternoon";
+    else if (h >= 18 && h < 23) slot = "evening";
+    else slot = "night";
+    timeSlots[slot]++;
+    const norm = normalizeEmotion(e.emotion);
+    timeEmotions[slot][norm] = (timeEmotions[slot][norm] || 0) + 1;
+  }
+
+  const activeSlots = Object.entries(timeSlots).filter(([, v]) => v > 0);
+  if (activeSlots.length > 0) {
+    console.log("\n  By time of day:");
+    const slotLabels = {
+      morning: "\u{1F305} morning  ",
+      afternoon: "\u{2600}\uFE0F afternoon",
+      evening: "\u{1F307} evening  ",
+      night: "\u{1F319} night    ",
+    };
+    for (const [slot, count] of activeSlots) {
+      const dominant = Object.entries(timeEmotions[slot]).sort(
+        (a, b) => b[1] - a[1],
+      )[0];
+      const emoji = emotionEmoji(dominant[0]);
+      console.log(
+        `    ${slotLabels[slot]}  ${count} checks, mostly ${emoji} ${dominant[0]}`,
+      );
+    }
+  }
+
+  // Daily trend (last 7 days with data)
+  const days = {};
+  for (const e of filtered) {
+    const day = (e.ts || "").slice(0, 10);
+    if (!day) continue;
+    if (!days[day]) days[day] = {};
+    const norm = normalizeEmotion(e.emotion);
+    days[day][norm] = (days[day][norm] || 0) + 1;
+  }
+
+  const dayList = Object.entries(days)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 7)
+    .reverse();
+
+  if (dayList.length > 1) {
+    console.log("\n  Daily trend:");
+    for (const [day, emos] of dayList) {
+      const total = Object.values(emos).reduce((a, b) => a + b, 0);
+      const dominant = Object.entries(emos).sort((a, b) => b[1] - a[1])[0];
+      const emoji = emotionEmoji(dominant[0]);
+      const weekday = new Date(day + "T12:00:00Z").toLocaleDateString("en", {
+        weekday: "short",
+      });
+      console.log(
+        `    ${day} (${weekday})  ${emoji} ${dominant[0].padEnd(10)} (${total} checks)`,
+      );
+    }
+  }
+
+  // Vibe score (happy=2, neutral=1, surprised=0.5, sad/angry/fearful/disgusted=-1)
+  const scoreMap = {
+    happy: 2,
+    neutral: 1,
+    surprised: 0.5,
+    sad: -1,
+    angry: -1,
+    fearful: -1,
+    disgusted: -1,
+  };
+  let totalScore = 0;
+  for (const e of filtered) {
+    const norm = normalizeEmotion(e.emotion);
+    totalScore += scoreMap[norm] != null ? scoreMap[norm] : 0;
+  }
+  const avgScore = totalScore / filtered.length;
+  let vibeLabel;
+  if (avgScore >= 1.5) vibeLabel = "\u{1F525} vibing";
+  else if (avgScore >= 0.8) vibeLabel = "\u{1F60E} good";
+  else if (avgScore >= 0.2) vibeLabel = "\u{1F610} meh";
+  else if (avgScore >= -0.3) vibeLabel = "\u{1F615} rough";
+  else vibeLabel = "\u{1F480} pain";
+
+  console.log(
+    `\n  Overall vibe: ${vibeLabel} (score: ${avgScore.toFixed(2)})\n`,
+  );
+}
+
+function historyClear() {
+  const histPath = getHistoryPath();
+  if (fs.existsSync(histPath)) {
+    fs.unlinkSync(histPath);
+    console.log("\n  Vibe history cleared.\n");
+  } else {
+    console.log("\n  No history to clear.\n");
+  }
 }
 
 // CLI routing
@@ -385,6 +635,16 @@ switch (command) {
   case "cooldown":
     cooldown(arg);
     break;
+  case "stats":
+    stats(arg);
+    break;
+  case "history":
+    if (arg === "clear") {
+      historyClear();
+    } else {
+      stats(arg);
+    }
+    break;
   default:
     console.log(`
   claude-vibe-check — webcam emotion feedback for Claude Code
@@ -397,5 +657,8 @@ switch (command) {
     claude-vibe-check mode [online|offline] [hsemotion|fer]
                                   Set analysis mode (offline auto-installs deps)
     claude-vibe-check cooldown [seconds] Set cooldown between checks
+    claude-vibe-check stats [today|week|<project>]
+                                  Show vibe statistics and trends
+    claude-vibe-check history clear      Clear vibe history
 `);
 }
