@@ -19,6 +19,7 @@ import os
 def analyze_fer(image_path):
     """Analyze emotions using FER library (Keras CNN + OpenCV Haar cascade)."""
     import cv2
+
     try:
         from fer import FER
     except ImportError:
@@ -32,16 +33,21 @@ def analyze_fer(image_path):
     results = detector.detect_emotions(img)
 
     if not results:
-        return {"error": "No face detected", "suggestion": "Make sure your face is visible and well-lit"}
+        return {
+            "error": "No face detected",
+            "suggestion": "Make sure your face is visible and well-lit",
+        }
 
     faces = []
     for r in results:
         dominant = max(r["emotions"], key=r["emotions"].get)
-        faces.append({
-            "dominant_emotion": dominant,
-            "confidence": round(r["emotions"][dominant], 3),
-            "all_emotions": {k: round(v, 3) for k, v in r["emotions"].items()},
-        })
+        faces.append(
+            {
+                "dominant_emotion": dominant,
+                "confidence": round(r["emotions"][dominant], 3),
+                "all_emotions": {k: round(v, 3) for k, v in r["emotions"].items()},
+            }
+        )
     return {"faces": faces, "backend": "fer"}
 
 
@@ -62,21 +68,43 @@ def analyze_hsemotion(image_path):
     faces_rects = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(48, 48))
 
     if len(faces_rects) == 0:
-        return {"error": "No face detected", "suggestion": "Make sure your face is visible and well-lit"}
+        return {
+            "error": "No face detected",
+            "suggestion": "Make sure your face is visible and well-lit",
+        }
 
-    recognizer = HSEmotionRecognizer(model_name="enet_b0_8_best_afew")
+    # Suppress model download messages that HSEmotion prints to stdout
+    import io
+    import contextlib
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        recognizer = HSEmotionRecognizer(model_name="enet_b0_8_best_afew")
 
     faces = []
     for x, y, w, h in faces_rects:
         face_img = img[y : y + h, x : x + w]
         emotion, scores = recognizer.predict_emotions(face_img, logits=True)
-        faces.append({
-            "dominant_emotion": emotion,
-            "all_emotions": {k: round(float(v), 3) for k, v in zip(
-                ["anger", "contempt", "disgust", "fear", "happiness", "neutral", "sadness", "surprise"],
-                scores,
-            )},
-        })
+        faces.append(
+            {
+                "dominant_emotion": emotion.lower(),
+                "all_emotions": {
+                    k: round(float(v), 3)
+                    for k, v in zip(
+                        [
+                            "anger",
+                            "contempt",
+                            "disgust",
+                            "fear",
+                            "happiness",
+                            "neutral",
+                            "sadness",
+                            "surprise",
+                        ],
+                        scores,
+                    )
+                },
+            }
+        )
     return {"faces": faces, "backend": "hsemotion"}
 
 
@@ -84,16 +112,19 @@ def detect_backend():
     """Auto-detect the best available backend."""
     try:
         from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
+
         return "hsemotion"
     except ImportError:
         pass
 
     try:
         from fer import FER
+
         return "fer"
     except ImportError:
         try:
             from fer.fer import FER
+
             return "fer"
         except ImportError:
             pass
@@ -103,7 +134,13 @@ def detect_backend():
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: emotion_detect.py <image_path> [--backend fer|hsemotion]"}))
+        print(
+            json.dumps(
+                {
+                    "error": "Usage: emotion_detect.py <image_path> [--backend fer|hsemotion]"
+                }
+            )
+        )
         sys.exit(1)
 
     image_path = sys.argv[1]
@@ -122,10 +159,14 @@ def main():
         backend = detect_backend()
 
     if backend is None:
-        print(json.dumps({
-            "error": "No emotion detection backend installed",
-            "install": "pip install fer opencv-python-headless  # or: pip install hsemotion-onnx opencv-python-headless",
-        }))
+        print(
+            json.dumps(
+                {
+                    "error": "No emotion detection backend installed",
+                    "install": "pip install fer opencv-python-headless  # or: pip install hsemotion-onnx opencv-python-headless",
+                }
+            )
+        )
         sys.exit(1)
 
     # Suppress TensorFlow/ONNX warnings

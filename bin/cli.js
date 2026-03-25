@@ -14,7 +14,14 @@ function readSettings() {
   if (!fs.existsSync(SETTINGS_PATH)) {
     return {};
   }
-  return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf-8"));
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf-8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    console.log(`\n  Error reading ${SETTINGS_PATH}: ${e.message}`);
+    console.log("  Fix the JSON syntax in that file and try again.\n");
+    process.exit(1);
+  }
 }
 
 function writeSettings(settings) {
@@ -444,12 +451,20 @@ function stats(filter) {
   let filtered = entries;
   let filterLabel = "";
   if (filter === "today") {
-    const today = new Date().toISOString().slice(0, 10);
-    filtered = entries.filter((e) => e.ts && e.ts.startsWith(today));
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    filtered = entries.filter((e) => {
+      if (!e.ts) return false;
+      const local = new Date(e.ts);
+      const localDate = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+      return localDate === today;
+    });
     filterLabel = " (today)";
   } else if (filter === "week") {
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    filtered = entries.filter((e) => e.ts >= weekAgo);
+    const weekAgo = Date.now() - 7 * 86400000;
+    filtered = entries.filter(
+      (e) => e.ts && new Date(e.ts).getTime() >= weekAgo,
+    );
     filterLabel = " (last 7 days)";
   } else if (filter && filter !== "all") {
     filtered = entries.filter((e) => e.project === filter || e.cwd === filter);
@@ -510,7 +525,9 @@ function stats(filter) {
   const timeSlots = { morning: 0, afternoon: 0, evening: 0, night: 0 };
   const timeEmotions = { morning: {}, afternoon: {}, evening: {}, night: {} };
   for (const e of filtered) {
-    const h = e.hour != null ? e.hour : new Date(e.ts).getUTCHours();
+    const d = e.ts ? new Date(e.ts) : null;
+    const h =
+      d && !isNaN(d.getTime()) ? d.getHours() : e.hour != null ? e.hour : 0;
     let slot;
     if (h >= 6 && h < 12) slot = "morning";
     else if (h >= 12 && h < 18) slot = "afternoon";
@@ -544,7 +561,10 @@ function stats(filter) {
   // Daily trend (last 7 days with data)
   const days = {};
   for (const e of filtered) {
-    const day = (e.ts || "").slice(0, 10);
+    if (!e.ts) continue;
+    const d = new Date(e.ts);
+    if (isNaN(d.getTime())) continue;
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     if (!day) continue;
     if (!days[day]) days[day] = {};
     const norm = normalizeEmotion(e.emotion);

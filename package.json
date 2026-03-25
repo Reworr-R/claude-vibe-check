@@ -1,6 +1,6 @@
 {
   "name": "claude-vibe-check",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Claude Code hook that reads your face after code changes and adjusts its work based on your reaction",
   "bin": {
     "claude-vibe-check": "bin/cli.js"

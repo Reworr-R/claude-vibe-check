@@ -43,7 +43,7 @@ log_vibe() {
 	local ts
 	ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 	local hour
-	hour=$(date +"%H")
+	hour=$(date +"%-H")
 	local project
 	project=$(basename "$HOOK_CWD")
 	printf '{"ts":"%s","hour":%d,"emotion":"%s","confidence":"%s","mode":"%s","project":"%s","cwd":"%s","session":"%s"}\n' \
@@ -57,9 +57,9 @@ else
 	PYTHON="python3"
 fi
 
-# Load config
-MODE="${VIBE_CHECK_MODE:-online}"
-COOLDOWN="${VIBE_CHECK_COOLDOWN:-60}"
+# Load config (file first, then env vars override)
+MODE="online"
+COOLDOWN="60"
 if [ -f "$CONFIG_FILE" ]; then
 	while IFS='=' read -r key value; do
 		case "$key" in
@@ -72,6 +72,9 @@ if [ -f "$CONFIG_FILE" ]; then
 		esac
 	done <"$CONFIG_FILE"
 fi
+# Env vars take precedence over config file
+[ -n "$VIBE_CHECK_MODE" ] && MODE="$VIBE_CHECK_MODE"
+[ -n "$VIBE_CHECK_COOLDOWN" ] && COOLDOWN="$VIBE_CHECK_COOLDOWN"
 # Validate cooldown is a number
 case "$COOLDOWN" in
 '' | *[!0-9]*) COOLDOWN=60 ;;
@@ -104,13 +107,15 @@ if [ "$MODE" = "offline" ]; then
 	EMOTION_JSON=$("$PYTHON" "$LIB_DIR/emotion_detect.py" "$CAPTURED" 2>/dev/null)
 
 	if [ $? -ne 0 ] || [ -z "$EMOTION_JSON" ]; then
-		# Fall back to online mode if offline detection fails
-		MODE="online"
+		# Offline detection failed — do NOT fall back to online (privacy)
+		rm -f "$CAPTURED" 2>/dev/null
+		exit 0
 	else
 		# Check for errors in the JSON output
 		HAS_ERROR=$(echo "$EMOTION_JSON" | "$PYTHON" -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'error' in d else 'no')" 2>/dev/null)
 		if [ "$HAS_ERROR" = "yes" ]; then
-			MODE="online"
+			rm -f "$CAPTURED" 2>/dev/null
+			exit 0
 		fi
 	fi
 fi
