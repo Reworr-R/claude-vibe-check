@@ -99,7 +99,7 @@ function setup() {
   // Check if already installed
   const existingStop = settings.hooks.Stop || [];
   const alreadyInstalled = existingStop.some((entry) =>
-    JSON.stringify(entry).includes("claude-vibe-check"),
+    JSON.stringify(entry).includes("vibe-check"),
   );
 
   if (alreadyInstalled) {
@@ -137,7 +137,7 @@ function uninstall() {
   }
 
   settings.hooks.Stop = settings.hooks.Stop.filter(
-    (entry) => !JSON.stringify(entry).includes("claude-vibe-check"),
+    (entry) => !JSON.stringify(entry).includes("vibe-check"),
   );
 
   if (settings.hooks.Stop.length === 0) {
@@ -354,7 +354,7 @@ function status() {
   const settings = readSettings();
   const installed =
     settings.hooks?.Stop?.some((entry) =>
-      JSON.stringify(entry).includes("claude-vibe-check"),
+      JSON.stringify(entry).includes("vibe-check"),
     ) || false;
 
   const deps = checkDependencies();
